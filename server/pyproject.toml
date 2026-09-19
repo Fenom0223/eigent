@@ -39,6 +39,14 @@ dependencies = [
     "celery>=5.6.2",
     "redis>=7.2.1",
     "loguru>=0.7.3",
+    # Pocket-to-Office (B34): el listener np_office/ corre en esta imagen
+    # (sidecar np_office_listener en server/docker-compose.yml; server/Dockerfile
+    # copia np_office/ a /app/np_office). El extra e2e trae python-olm/libolm,
+    # necesario para descifrar la sala "Mi Oficina" (megolm) y subir archivos
+    # cifrados (upload(..., encrypt=True)). Pin <0.26: 0.26 migra el extra e2e
+    # de python-olm a vodozemac y rompe la superficie de API validada
+    # (Parte 8, Docker e2ee PASS 6/6 con matrix-nio 0.25.2).
+    "matrix-nio[e2e]>=0.25.2,<0.26",
 ]
 
 [project.optional-dependencies]

@@ -85,21 +85,25 @@ OfficeListener(handler=handler).run_forever()
 
 ## 4. Ejecución
 
-### Docker
+### Docker (sidecar)
+
+Ya está aplicado en `server/docker-compose.yml` (servicio `np_office_listener`),
+que reusa la imagen de `server/Dockerfile` — esa imagen ya trae `np_office/`
+copiado a `/app/np_office` y `matrix-nio[e2e]` (con `libolm-dev` en la base):
 
 ```yaml
-  eigent-brain:
-    # ...igual que hoy...
-    env_file: ./docker.env
-
   np_office_listener:
-    image: <misma imagen de eigent>
+    build:
+      context: ..
+      dockerfile: server/Dockerfile      # ya incluye np_office/ + matrix-nio[e2e]
     command: ["python", "np_office/np_office_listener.py"]
     env_file: ./docker.env
+    environment:
+      - NP_OFFICE_TASK_URL=http://api:5678/office/task   # wiring pendiente (Camino A)
     volumes:
-      - ./data:/app/data
-    depends_on: [eigent-brain]
-    restart: always
+      - ./np_office_state:/app/.np_office   # store Olm persistente (device_id fijo)
+    depends_on: [api]
+    restart: unless-stopped
 ```
 
 ### Local (dev)

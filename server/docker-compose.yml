@@ -142,6 +142,39 @@ services:
     networks:
       - eigent_network
 
+  # Pocket-to-Office (B34): listener Matrix de la sala "Mi Oficina".
+  # Credenciales NP_MX_* generadas por onboard.sh (repo np-sovereign-core) en
+  # server/.env. Requiere matrix-nio[e2e] (server/pyproject.toml) y np_office/
+  # copiado a la imagen por server/Dockerfile. E2EE: device_id FIJO
+  # (NPOFFICEDESKTOP) + store Olm persistente; si el device_id cambia entre
+  # arranques, el listener queda mudo en la sala cifrada.
+  np_office_listener:
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+      args:
+        database_url: postgresql://postgres:123456@postgres:5432/eigent
+    container_name: eigent_np_office_listener
+    command: ["python", "np_office/np_office_listener.py"]
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # Wiring pendiente (guia §7 #4): apuntar a la ruta real del ejecutor
+      # (Camino A del np_office/README.md). El listener corre igual sin ella.
+      - NP_OFFICE_TASK_URL=http://api:5678/office/task
+      - database_url=postgresql://postgres:123456@postgres:5432/eigent
+      - redis_url=redis://redis:6379/0
+    volumes:
+      - ./np_office_state:/app/.np_office   # store Olm persistente (device_id fijo)
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - eigent_network
+
 volumes:
   postgres_data:
     driver: local
