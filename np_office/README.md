@@ -39,7 +39,18 @@ en el compose. El listener las lee del entorno, igual que el backend.
 
 ### Camino A — HTTP contra el Brain (recomendado: cero acople)
 
-El Brain ya es FastAPI (puerto **5001**, `EIGENT_BRAIN_PORT`). Agregar una ruta:
+> **Implementado (con límite de arquitectura):** `server/main.py` expone
+> `POST /office/task` (raíz, sin `/v1`) en el contenedor `api` (puerto 5678), que
+> es el que el sidecar llama. El executor es **configurable**:
+> `NP_OFFICE_EIGENT_EXECUTOR_URL` (reenvía al Brain/worker externo) o
+> `NP_OFFICE_LLM_MODEL` (+ `litellm_url`/`NP_OFFICE_LLM_KEY`, responde vía la
+> pasarela LiteLLM). **Límite:** el contenedor `server` es el API de gestión
+> (historial/espacios/modelos) y NO ejecuta agentes; el runtime multi-agente real
+> (DOE) vive en el Brain de escritorio (`backend/`, `EIGENT_BRAIN_PORT=5001`),
+> acoplado a Electron (task_lock/workspace/SSE). Para ejecución DOE completa, el
+> listener debe correr junto al Brain y apuntar `NP_OFFICE_TASK_URL` ahí.
+
+El Brain es FastAPI (puerto **5001**, `EIGENT_BRAIN_PORT`). Agregar una ruta:
 
 ```python
 # backend/app/office.py
