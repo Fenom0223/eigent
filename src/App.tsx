@@ -22,6 +22,7 @@ import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { useBackgroundTaskProcessor } from './hooks/useBackgroundTaskProcessor';
+import { useEigentBootHealing } from './hooks/useEigentBootHealing';
 import { useExecutionSubscription } from './hooks/useExecutionSubscription';
 import { useRemoteControlBridge } from './hooks/useRemoteControlBridge';
 import { useTriggerTaskExecutor } from './hooks/useTriggerTaskExecutor';
@@ -41,6 +42,10 @@ function App() {
   const shouldSubscribe = !!token;
   useExecutionSubscription(shouldSubscribe);
   useBackgroundTaskProcessor();
+
+  // Boot healing: auto-login, auto-create default project, auto-restore last
+  // conversation across reloads. Persisted by autostart.sh 5.12 — do not remove.
+  useEigentBootHealing();
 
   // Execute triggered tasks automatically when WebSocket events are received
   useTriggerTaskExecutor();
