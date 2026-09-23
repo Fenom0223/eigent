@@ -24,6 +24,9 @@ dependencies = [
     "opentelemetry-api>=1.34.1",
     "opentelemetry-sdk>=1.34.1",
     "opentelemetry-exporter-otlp-proto-http>=1.34.1",
+    # Pin <0.26: 0.26 migra el extra e2e de python-olm a vodozemac y rompe la
+    # superficie de API validada en vivo (Parte 8, Docker e2ee PASS 6/6).
+    "matrix-nio[e2e]>=0.25.2,<0.26",
 ]
 
 

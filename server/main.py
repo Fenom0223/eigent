@@ -99,6 +99,100 @@ async def health_check():
         "server_hash": SERVER_CODE_HASH,
     }
 
+
+# ---------------------------------------------------------------------------
+# Pocket-to-Office executor (sidecar np_office_listener -> POST /office/task)
+#
+# Contrato del listener: {"task_id","text","locale","from"}
+#                     ->  {"answer": str, "files": [paths]}
+#
+# IMPORTANTE (arquitectura): este contenedor `server` es el API de gestion
+# (historial/espacios/modelos) y NO ejecuta agentes. El runtime multi-agente
+# real (DOE) vive en el Brain de escritorio (backend/, EIGENT_BRAIN_PORT 5001),
+# acoplado a Electron (task_lock/workspace/SSE) y no disponible server-side.
+# Por eso el executor es configurable:
+#   * NP_OFFICE_EIGENT_EXECUTOR_URL -> reenvia la tarea a un ejecutor externo
+#     (el Brain local, u otro worker) y devuelve su JSON {answer, files}.
+#   * NP_OFFICE_LLM_MODEL (+ NP_OFFICE_LLM_URL o litellm_url, + NP_OFFICE_LLM_KEY)
+#     -> responde via la pasarela LiteLLM que ya usa Eigent (nivel texto).
+#   * sin configuracion -> responde 200 con un mensaje explicativo (el movil
+#     recibe texto, no un fallo opaco).
+# ---------------------------------------------------------------------------
+from typing import Optional as _Optional
+
+import httpx as _httpx
+from pydantic import BaseModel as _BaseModel
+
+
+class _OfficeTask(_BaseModel):
+    task_id: str = ""
+    text: str = ""
+    locale: str = "es"
+    from_: _Optional[str] = None
+
+    model_config = {"populate_by_name": True, "extra": "ignore"}
+
+
+async def _office_execute(text: str):
+    executor = (os.environ.get("NP_OFFICE_EIGENT_EXECUTOR_URL") or "").strip()
+    if executor:
+        async with _httpx.AsyncClient(timeout=900) as client:
+            resp = await client.post(executor, json={"text": text})
+            resp.raise_for_status()
+            data = resp.json()
+        answer = data.get("answer") or data.get("text") or str(data)
+        files = [str(f) for f in (data.get("files") or [])]
+        return str(answer), files
+
+    llm_url = (
+        os.environ.get("NP_OFFICE_LLM_URL") or os.environ.get("litellm_url") or ""
+    ).rstrip("/")
+    model = (os.environ.get("NP_OFFICE_LLM_MODEL") or "").strip()
+    api_key = (os.environ.get("NP_OFFICE_LLM_KEY") or "").strip()
+    if llm_url and model:
+        headers = {"Content-Type": "application/json"}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        async with _httpx.AsyncClient(timeout=900) as client:
+            resp = await client.post(
+                f"{llm_url}/v1/chat/completions",
+                headers=headers,
+                json={
+                    "model": model,
+                    "messages": [{"role": "user", "content": text}],
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        answer = data["choices"][0]["message"]["content"]
+        return str(answer), []
+
+    return (
+        "El executor de Eigent no esta configurado. Definir NP_OFFICE_LLM_MODEL "
+        "(+ litellm_url / NP_OFFICE_LLM_KEY) o NP_OFFICE_EIGENT_EXECUTOR_URL. La "
+        "ejecucion completa de agentes Eigent (DOE) requiere el Brain de escritorio.",
+        [],
+    )
+
+
+@api.post("/office/task", tags=["office"])
+async def office_task(payload: _OfficeTask):
+    text = (payload.text or "").strip()
+    if not text:
+        return {"answer": "", "files": []}
+    try:
+        answer, files = await _office_execute(text)
+    except Exception as exc:  # noqa: BLE001
+        loguru_logger.exception("office: task error")
+        answer = f"Eigent no pudo ejecutar la tarea: {type(exc).__name__}: {exc}"
+        files = []
+    loguru_logger.info(
+        "office: TASK_DONE task_id={} chars_in={} files={}",
+        payload.task_id, len(text), len(files),
+    )
+    return {"answer": answer, "files": files}
+
+
 # Backward-compatible webhook route (/api/webhook/...)
 from app.domains.trigger.api.webhook_controller import router as webhook_router
 api.include_router(webhook_router, prefix=prefix)

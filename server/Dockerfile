@@ -11,8 +11,13 @@ RUN apt-get update -o Acquire::Retries=3 && apt-get install -y --no-install-reco
     build-essential \
     gcc \
     python3-dev \
+    libolm-dev \
     && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
     && rm -rf /var/lib/apt/lists/*
+# libolm-dev: Pocket-to-Office (B34). matrix-nio[e2e] (server/pyproject.toml)
+# exige libolm para la maquina Olm/megolm del listener np_office/. En python 3.12
+# el wheel manylinux de python-olm ya trae libolm; libolm-dev cubre el caso de
+# compilacion desde sdist y deja la base consistente con Odysseus/Eigent-brain.
 
 # Add Rust to PATH
 ENV PATH="/root/.cargo/bin:$PATH"
@@ -38,6 +43,11 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # Then, add the rest of the project source code and install it
 # Installing separately from its dependencies allows optimal layer caching
 COPY server/ /app
+
+# Pocket-to-Office (B34): el listener vive en np_office/ (raiz del repo) y su
+# modulo es autocontenido; se copia tal cual para que el sidecar
+# np_office_listener (server/docker-compose.yml) lo ejecute en esta imagen.
+COPY np_office/ /app/np_office
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --no-dev
