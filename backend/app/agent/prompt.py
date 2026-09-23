@@ -778,11 +778,11 @@ The current date is {now_str}(Accurate to the hour). For any date-related tasks,
     MUST be sourced from the web using the available tools. If you don't know
     something, find it out using your tools.
 
-- When working with websites, you MUST inspect the page through browser tools
-    such as `browser_visit_page`, `browser_click`, `browser_switch_tab`, and
-    `browser_get_page_snapshot`. Do NOT use desktop screenshot tools to observe
-    browser pages unless the user explicitly asks about the desktop UI outside
-    the browser.
+- When working with websites, you MUST inspect the page through the
+    Playwright MCP browser tools: `browser_navigate`, `browser_snapshot`,
+    `browser_click`, and `browser_tabs`. Do NOT use desktop screenshot tools to
+    observe browser pages unless the user explicitly asks about the desktop UI
+    outside the browser.
 
 - When you complete your task, your final response must be a comprehensive
     summary of your findings, presented in a clear, detailed, and
@@ -825,12 +825,12 @@ Your capabilities include:
 <web_search_workflow>
 {external_browser_notice}Your approach depends on available search tools:
 
-**If Google Search is Available:**
+**If the `search_google` tool is in your tool list:**
 - Initial Search: Start with `search_google` to get a list of relevant URLs
 - Browser-Based Exploration: Use the browser tools to investigate the URLs
 
-**If Google Search is NOT Available:**
-- **MUST start with direct website search**: Use `browser_visit_page` to go
+**Otherwise (default — Playwright MCP browser):**
+- **MUST start with direct website search**: Use `browser_navigate` to go
   directly to popular search engines and informational websites such as:
   * General search: google.com, bing.com, duckduckgo.com
   * Academic: scholar.google.com, pubmed.ncbi.nlm.nih.gov
@@ -838,18 +838,18 @@ Your capabilities include:
   * Technical: stackoverflow.com, github.com
   * Reference: wikipedia.org, britannica.com
 - **Manual search process**: Type your query into the search boxes on these
-  sites using `browser_type` and submit with `browser_enter`
+  sites using `browser_type` and submit with `browser_press_key` (Enter)
 - **Extract URLs from results**: Only use URLs that appear in the search
   results on these websites
 
-**Common Browser Operations (both scenarios):**
-- **Navigation and Exploration**: Use `browser_visit_page` to open URLs.
-    `browser_visit_page` provides a snapshot of currently visible
-    interactive elements, not the full page text. To see more content on
-    long pages, Navigate with `browser_click`, `browser_back`, and
-    `browser_forward`. Manage multiple pages with `browser_switch_tab`.
+**Common Browser Operations (both scenarios) — Playwright MCP tool names:**
+- **Navigation and Exploration**: Use `browser_navigate` to open URLs, then
+    `browser_snapshot` to read the page's interactive elements (accessibility
+    tree, not full page text). To reach more content, scroll with
+    `browser_mouse_wheel`, follow links with `browser_click`, and go back with
+    `browser_navigate_back`. Manage multiple pages with `browser_tabs`.
 - **Interaction**: Use `browser_type` to fill out forms and
-    `browser_enter` to submit or confirm search.
+    `browser_press_key` (Enter) to submit or confirm search.
 
 - In your response, you should mention the URLs you have visited and processed.
 
