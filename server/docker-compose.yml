@@ -143,11 +143,13 @@ services:
       - eigent_network
 
   # Pocket-to-Office (B34): listener Matrix de la sala "Mi Oficina".
-  # Credenciales NP_MX_* generadas por onboard.sh (repo np-sovereign-core) en
-  # server/.env. Requiere matrix-nio[e2e] (server/pyproject.toml) y np_office/
-  # copiado a la imagen por server/Dockerfile. E2EE: device_id FIJO
-  # (NPOFFICEDESKTOP) + store Olm persistente; si el device_id cambia entre
-  # arranques, el listener queda mudo en la sala cifrada.
+  # Credenciales NP_MX_* por instancia (empleado x app x nodo): las genera
+  # onboard.sh (np-sovereign-core) en <usuario>.eigent.env. Apuntar con:
+  #   NP_OFFICE_ENV_FILE=./maria.eigent.env docker compose up -d np_office_listener
+  # (fallback: .env, modelo legacy compartido). Requiere matrix-nio[e2e]
+  # (server/pyproject.toml) y np_office/ copiado a la imagen por server/Dockerfile.
+  # E2EE: device_id FIJO (NPOFFICE-EIGENT-<NODO>) + store Olm persistente; si
+  # el device_id cambia entre arranques, el listener queda mudo en la sala.
   np_office_listener:
     build:
       context: ..
@@ -158,7 +160,7 @@ services:
     command: ["python", "np_office/np_office_listener.py"]
     restart: unless-stopped
     env_file:
-      - .env
+      - ${NP_OFFICE_ENV_FILE:-.env}
     environment:
       # Wiring pendiente (guia §7 #4): apuntar a la ruta real del ejecutor
       # (Camino A del np_office/README.md). El listener corre igual sin ella.

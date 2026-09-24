@@ -20,16 +20,26 @@ Element X (móvil) ← resultado + m.file (informe PDF/CSV) ←────┘
 
 ## 2. Credenciales
 
-Las genera `onboard.sh` (repo `np-sovereign-core`) en el `docker.env` del usuario:
+Las genera `onboard.sh` (repo `np-sovereign-core`) en `<usuario>.eigent.env`
+(un archivo por empleado × app × nodo; sin password: solo token). Se inyecta
+al listener con `NP_OFFICE_ENV_FILE=./maria.eigent.env docker compose ...`
+(fallback legacy: `.env`). Ya no hay que tocar nada a mano:
 
 ```ini
 NP_MX_HOMESERVER=https://np-cpu-<cliente>.<dominio>
 NP_MX_DESKTOP_MXID=@desktop-<usuario>:<dominio>
 NP_MX_DESKTOP_TOKEN=<token>
+NP_MX_DESKTOP_DEVICE_ID=NPOFFICE-EIGENT-<nodo>
+NP_MX_DEVICE_NAME=SIYAD Office · eigent · <nodo>
 NP_MX_OFFICE_ROOM_ID=!abc123:<dominio>
-NP_MX_OFFICE_ALIAS="#mi-oficina-<usuario>:<dominio>"
+NP_MX_OFFICE_ALIAS="#mi-oficina-<usuario>-eigent-<nodo>:<dominio>"
 NP_MX_BOT_MXID=@np-bot:<dominio>
+NP_OFFICE_STATE_DIR=/app/data/np_office/<usuario>/<nodo>/eigent
 ```
+
+El listener hace `room_join` automático al arrancar (idempotente): si la sala
+fue creada por el empleado y `@desktop-<usuario>` quedó solo invitado, se une
+solo en el primer sync.
 
 En Eigent (Electron), el `docker.env` se inyecta como variables de entorno al
 proceso principal y al Brain: `docker run --env-file docker.env` o `env_file:`

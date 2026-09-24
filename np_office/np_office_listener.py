@@ -1,4 +1,18 @@
 #!/usr/bin/env python3
+# ========= Copyright 2025-2026 @ Eigent.ai All Rights Reserved. =========
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ========= Copyright 2025-2026 @ Eigent.ai All Rights Reserved. =========
+
 # -*- coding: utf-8 -*-
 """
 np_office_listener.py - Pocket-to-Office (SIYAD / New Paradigm)
@@ -39,7 +53,12 @@ VARIABLES DE ENTORNO (las escribe onboard.sh en el docker.env del usuario)
     NP_MX_DESKTOP_MXID        @desktop-<usuario>:<dominio>
     NP_MX_DESKTOP_TOKEN       token de sesion ya emitido (preferido)
     NP_MX_DESKTOP_PASSWORD    fallback si no hay token
-    NP_MX_DESKTOP_DEVICE_ID   device_id FIJO (default: NPOFFICEDESKTOP)
+    NP_MX_DESKTOP_DEVICE_ID   device_id FIJO (NPOFFICE-<APP>-<NODO>; legacy:
+                              NPOFFICEDESKTOP). Si existe
+                              <NP_OFFICE_STATE_DIR>/device_id.txt, el valor del
+                              store tiene PREFERENCIA sobre esta variable.
+    NP_MX_DEVICE_NAME         (opcional) nombre visible del dispositivo
+                              (whitelabel). default: "SIYAD Office Desktop".
     NP_MX_OFFICE_ROOM_ID      !abc123:dominio      (preferido)
     NP_MX_OFFICE_ALIAS        #mi-oficina-<usuario>:<dominio>
     NP_MX_BOT_MXID            @np-bot:<dominio>    (unico remitente confiable)
@@ -88,6 +107,7 @@ except ImportError:  # pragma: no cover
 TASK_MARKER = "NP_TASK:"
 LOG_PREFIX = "[OFFICE]"
 DEFAULT_DEVICE_ID = "NPOFFICEDESKTOP"
+DEFAULT_DEVICE_NAME = "SIYAD Office Desktop"
 
 Handler = Callable[["Task"], Any]
 
@@ -136,6 +156,7 @@ class OfficeConfig:
     task_url: str
     state_dir: str
     trusted: Tuple[str, ...]
+    device_name: str = DEFAULT_DEVICE_NAME
     encrypted: bool = False
     sync_timeout: int = 30000
     backoff_start: float = 2.0
@@ -181,12 +202,14 @@ class OfficeConfig:
         except ValueError:
             sync_timeout = 30000
 
+        device_name = os.getenv("NP_MX_DEVICE_NAME") or DEFAULT_DEVICE_NAME
         return cls(
             homeserver=homeserver,
             mxid=mxid,
             token=token,
             password=password,
             device_id=device_id,
+            device_name=device_name,
             room_id=room_id,
             room_alias=room_alias,
             bot_mxid=bot_mxid,
@@ -208,6 +231,7 @@ class OfficeListener:
         self.client: Optional[AsyncClient] = None
         self._room_id: Optional[str] = self.config.room_id or None
         self._seen: set = set()
+        self._joined: set = set()
         self._seen_order: list = []
         self._stop = asyncio.Event()
 
@@ -292,7 +316,7 @@ class OfficeListener:
             # password/device_name/token). El device_id FIJO va en el
             # constructor de AsyncClient (arriba) y nio lo reusa en Api.login.
             resp = await client.login(
-                cfg.password, device_name="SIYAD Office Desktop",
+                cfg.password, device_name=cfg.device_name,
             )
             if not isinstance(resp, LoginResponse):
                 raise RuntimeError(f"login fallo: {resp}")
@@ -367,6 +391,34 @@ class OfficeListener:
         if getattr(event, "event_id", "") in self._seen:
             return False
         return True
+
+    async def _ensure_joined(self) -> None:
+        """Une la cuenta desktop a la sala si aun no es miembro.
+
+        Cuando onboard.sh crea la sala con el token del EMPLEADO, la cuenta
+        @desktop-<usuario> queda solo INVITADA (npo_provision_instance invita
+        a bot + desktop). Sin este join el listener queda "mudo": los eventos
+        de la timeline no llegan a una cuenta solo invitada. room_join es
+        idempotente en Synapse (si ya es miembro devuelve 200 con el room_id),
+        asi que se llama una vez por room_id y se reintenta en cada ciclo de
+        sync hasta lograrlo.
+        """
+        room_id = self.config.room_id
+        if not room_id or room_id in self._joined:
+            return
+        try:
+            resp = await self.client.room_join(room_id)
+            joined = getattr(resp, "room_id", None)
+            if joined:
+                self._joined.add(joined)
+                log("ROOM_JOINED", room=joined)
+            else:
+                log("ROOM_JOIN_FAIL", room=room_id,
+                    detail=str(getattr(resp, "message", resp))[:200])
+        except Exception as exc:
+            # No es fatal: si el invite llega despues, el proximo ciclo de
+            # sync/retry reintenta el join.
+            log("ROOM_JOIN_FAIL", room=room_id, exc=str(exc)[:200])
 
     def _remember(self, event_id: str) -> None:
         if not event_id:
@@ -470,7 +522,7 @@ class OfficeListener:
         executor = "handler" if self.handler else ("http" if cfg.task_url else "none")
         log("BOOT", mxid=cfg.mxid, homeserver=cfg.homeserver,
             room=(cfg.room_id or cfg.room_alias), executor=executor,
-            device_id=cfg.device_id, e2ee=cfg.encrypted,
+            device_id=cfg.device_id, device_name=cfg.device_name, e2ee=cfg.encrypted,
             trusted=",".join(cfg.trusted))
 
         backoff = cfg.backoff_start
@@ -479,6 +531,7 @@ class OfficeListener:
                 if self.client is None:
                     await self._login()
                 await self._resolve_room()
+                await self._ensure_joined()
                 await self.client.sync(timeout=cfg.sync_timeout)
                 backoff = cfg.backoff_start
             except asyncio.CancelledError:
@@ -517,6 +570,7 @@ def selfcheck(config: OfficeConfig) -> int:
     print(f"  e2ee       : {'requerido' if config.encrypted else 'opcional/no exigido'}")
     print(f"  confiables : {', '.join(config.trusted)}")
     print(f"  ejecutor   : {config.task_url or 'handler Python (solo via API)'}")
+    print(f"  device_name: {config.device_name}")
     print(f"  state_dir  : {config.state_dir}")
     print(f"  sync       : {config.sync_timeout} ms")
     return 0
