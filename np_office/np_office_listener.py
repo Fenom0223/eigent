@@ -1,4 +1,18 @@
 #!/usr/bin/env python3
+# ========= Copyright 2025-2026 @ Eigent.ai All Rights Reserved. =========
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ========= Copyright 2025-2026 @ Eigent.ai All Rights Reserved. =========
+
 # -*- coding: utf-8 -*-
 """
 np_office_listener.py - Pocket-to-Office (SIYAD / New Paradigm)
@@ -384,7 +398,9 @@ class OfficeListener:
         Cuando onboard.sh crea la sala con el token del EMPLEADO, la cuenta
         @desktop-<usuario> queda solo INVITADA (npo_provision_instance invita
         a bot + desktop). Sin este join el listener queda "mudo": los eventos
-        de la timeline no llegan a una cuenta solo invitada. room_join es
+        de la timeline no llegan a una cuenta solo invitada. join() de
+        matrix-nio (NO room_join: ese metodo NO existe y tiraba
+        AttributeError -> ROOM_JOIN_FAIL en bucle -> listener mudo) es
         idempotente en Synapse (si ya es miembro devuelve 200 con el room_id),
         asi que se llama una vez por room_id y se reintenta en cada ciclo de
         sync hasta lograrlo.
@@ -393,7 +409,7 @@ class OfficeListener:
         if not room_id or room_id in self._joined:
             return
         try:
-            resp = await self.client.room_join(room_id)
+            resp = await self.client.join(room_id)
             joined = getattr(resp, "room_id", None)
             if joined:
                 self._joined.add(joined)
