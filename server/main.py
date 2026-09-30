@@ -123,6 +123,9 @@ from typing import Optional as _Optional
 import httpx as _httpx
 from pydantic import BaseModel as _BaseModel
 
+# SQL-NUMERIC-01: el agregado (conteo/suma/orden) lo calcula SQL, no el LLM.
+from office_grounding import GROUNDING_RULE, sql_grounding
+
 
 class _OfficeTask(_BaseModel):
     task_id: str = ""
@@ -134,6 +137,16 @@ class _OfficeTask(_BaseModel):
 
 
 async def _office_execute(text: str):
+    # SQL-NUMERIC-01 (30-sep-2026): si la pregunta toca tablas, el agregado
+    # (conteos, sumas, orden) viaja YA CALCULADO desde SQL en el propio
+    # prompt → el modelo sólo redacta. Sin esto el executor era un LLM
+    # "pelado" y el 29-sep publicó 5 facturas = 56,700 (ground truth 4 =
+    # 53,900; contó INV-0810 CREDIT HOLD como OVERDUE).
+    _grounding = sql_grounding(text)
+    if _grounding:
+        text = text + GROUNDING_RULE.format(grounding=_grounding)
+        loguru_logger.info("office: SQL_GROUNDING bytes={}", len(_grounding))
+
     executor = (os.environ.get("NP_OFFICE_EIGENT_EXECUTOR_URL") or "").strip()
     if executor:
         async with _httpx.AsyncClient(timeout=900) as client:
