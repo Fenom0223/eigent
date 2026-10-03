@@ -137,6 +137,13 @@ class _OfficeTask(_BaseModel):
 
 
 async def _office_execute(text: str):
+    # OFFICE-LLM-401-02 (3-oct-2026): recoger la key vigente de LiteLLM en cada
+    # llamada. El .env sólo se lee al arrancar, así que un re/deploy que rota la
+    # master key dejaba esta ruta en 401 silencioso (la tarea "terminaba" con el
+    # error dentro del texto). Coste: un os.stat guardado por mtime.
+    from np_llm_creds import ensure as _ensure_llm_creds
+    _ensure_llm_creds()
+
     # SQL-NUMERIC-01 (30-sep-2026): si la pregunta toca tablas, el agregado
     # (conteos, sumas, orden) viaja YA CALCULADO desde SQL en el propio
     # prompt → el modelo sólo redacta. Sin esto el executor era un LLM
