@@ -203,4 +203,12 @@ def agent_model(
         toolkits_to_register_agent=toolkits_to_register_agent,
         enable_snapshot_clean=enable_snapshot_clean,
         stream_accumulate=False,
+        # FIX DOE-TOKENS-03: la ventana REAL del modelo es 16896 y litellm
+        # fuerza max_tokens=2048 -> el techo de entrada es 14848. Camel usa
+        # token_limit para el umbral de resumen (summarize_threshold=50%) y con
+        # el valor por defecto (~128k) NUNCA resumia: el historial crecia hasta
+        # cruzar 14848 y vLLM devolvia 400 con "14849 input tokens" (+1 del
+        # template) 48 veces. Con 14000 (< 14848) el agente resume antes del
+        # techo y la peticion siempre cabe.
+        token_limit=14000,
     )
